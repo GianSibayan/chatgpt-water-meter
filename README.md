@@ -1,68 +1,69 @@
-# ChatGPT Water Meter
+# stop it with da water yochacho
 
-Estimates, never measures, the energy and water footprint of your ChatGPT
-usage. Every constant it uses is cited and swappable. Full writeup of what
-it knows, what it has to guess, and why: see METHODOLOGY.md.
+A small browser extension that shows roughly how much water your ChatGPT chats use.
 
-Not the first tool like this: Princeton's [GPTFootprint](https://doi.org/10.1145/3706599.3719708)
-(CHI 2025) did a flat per-query average and a user study ahead of us. This
-project's main addition is a token-based estimate (default methodology
-benchmarked specifically against GPT-4o and independently validated
-against OpenAI's own disclosed figure, see METHODOLOGY.md) plus visible,
-swappable, cited math rather than one fixed number.
+It puts a little tank on chatgpt.com, and the tank fills as you chat.
 
-## Setup
+## What you'll see
+- **This chat:** water used by the chat you're in.
+- **All chats today:** the same, added up across every chat.
+- Under that, the energy (Wh) and carbon (g CO2e) that come with it.
+- Click the toolbar icon for today, this week, and all-time totals.
+
+These are estimates, not measurements. OpenAI doesn't publish per-chat numbers, so treat everything as a rough guide.
+
+## Install
+Works in Edge and Chrome. It's waiting for review on the Edge Add-ons store, so for now you build it yourself (needs [Node.js](https://nodejs.org)):
 
 ```
+git clone https://github.com/GianSibayan/chatgpt-water-meter.git
+cd chatgpt-water-meter
 npm install
 npm run build
 ```
 
-Then in Chrome: `chrome://extensions` -> enable Developer mode -> Load
-unpacked -> select this folder.
+Then:
+1. Open `edge://extensions` (`chrome://extensions` on Chrome).
+2. Turn on **Developer mode**.
+3. Click **Load unpacked** and pick the `chatgpt-water-meter` folder.
+4. Open chatgpt.com and start chatting.
 
-## Develop
+## Privacy
+Everything stays in your browser. No accounts, no analytics, no network requests. Details in [PRIVACY.md](PRIVACY.md).
 
+## What it counts
+- Your messages and ChatGPT's replies, by token count.
+- Thinking time, when ChatGPT shows "Worked for 29s".
+- Each generated image, at a flat estimate.
+
+Not counted: uploaded files like PDFs, and ChatGPT's hidden system prompt.
+
+## How accurate is it?
+Rough. The same chat can read about 10x apart depending on whose research you use and whether you count the water power plants use to make the electricity. The default numbers come from a benchmark of GPT-4o, an older model, because it's the closest one measured. Every number has a source in `src/constants.js`, and the full reasoning is in [METHODOLOGY.md](METHODOLOGY.md).
+
+## For developers
 ```
-npm run watch
-```
-
-Rebuilds on every save. Reload the extension in `chrome://extensions`
-after each change (Chrome doesn't hot-reload unpacked extensions).
-
-## Test
-
-```
-npm test
-```
-
-Runs the calibration suite: checks that each methodology still lands in
-a defensible range and scales linearly with token count. Run this after
-touching anything in `src/constants.js` or `src/methodology/`.
-
-## Project layout
-
-```
-manifest.json              MV3 manifest
-src/constants.js           every number used, with source + date
-src/methodology/           four independent, swappable calculation models (default: jegham-benchmark)
-src/content-script.js      detects messages on chatgpt.com, tokenizes, computes
-src/lib/tokenizer.js       real BPE tokenizer (gpt-tokenizer), not a word-count guess
-src/lib/storage.js         daily/weekly/all-time aggregation
-src/lib/widget.js          floating in-page widget
-popup.html / src/popup.js  totals + methodology picker
-tests/                     calibration tests
+npm install
+npm run build   # bundles the extension
+npm test        # runs the tests
+npm run watch   # rebuilds on save (reload the extension after each change)
 ```
 
-## Contributing a better number
+```
+manifest.json          extension settings
+popup.html             toolbar popup
+widget.css             the on-page tank
+src/constants.js       every number, with its source
+src/methodology/       four ways to turn tokens into energy and water
+src/content-script.js  reads the chat page and does the counting
+src/lib/               tokenizer, storage, widget, hidden-work detection
+icons/ fonts/          assets (Zen Kurenaido font, SIL OFL)
+tests/                 tests
+```
 
-Open `src/constants.js`, change the value and its `source` field, run
-`npm test`. That's the whole review surface for a methodology update,
-no other file should need to change.
+**Got a better number?** Change the value and its `source` in `src/constants.js`, then run `npm test`. That's the whole change.
 
-## Known limitations
-
-See METHODOLOGY.md, but headline ones: DOM selectors will break on a
-ChatGPT frontend redesign, reasoning-mode tokens are invisible and only
-roughly compensated for, and the hidden system-prompt overhead is a
-flat guess. This is an order-of-magnitude tool, not a utility bill.
+## Credits
+- Research behind the numbers: [Jegham et al. 2025](https://arxiv.org/abs/2505.09598), Luccioni et al. 2024, and Altman's and Google's published per-query figures.
+- Prior art: Princeton's [GPTFootprint](https://doi.org/10.1145/3706599.3719708) (CHI 2025).
+- Made by @euginini06_. Not affiliated with or endorsed by OpenAI. License in [LICENSE](LICENSE).
