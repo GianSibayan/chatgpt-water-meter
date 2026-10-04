@@ -78,13 +78,14 @@ export default {
     cifKgPerKwh: 0.35, // grid carbon intensity
   },
 
-  // Chain-of-thought / "reasoning" tokens are generated but never shown.
-  // Applied to output tokens only when a reasoning indicator is detected.
-  // Jegham et al. 2025 measured GPT-5's actual high-vs-minimal-reasoning
-  // ratio at 4.8x (long prompts) to 14.8x (short prompts) for the same
-  // prompt length. 5x is a deliberately conservative pick near the low
-  // (long-prompt) end of that measured range, not an invented guess.
-  reasoningMultiplier: 5,
+  // Hidden work (thinking, reading files, generating images) shows up on the
+  // page only as a label like "Worked for 29s". Those seconds are converted to
+  // energy at this per-request power. Derived, not published: Jegham et al. 2025
+  // give the utilization of a large-class 8-GPU H100 server (GPUs 5.5 to 7.5
+  // percent, other components 6.25 percent). With a standard 5.6 kW GPU rating,
+  // 4.6 kW for the rest of a 10.2 kW node, and PUE 1.12, that is about 0.73 kW.
+  // Cross-check: 0.73 kW for about 6 s reproduces their 1.2 Wh medium prompt.
+  workPowerKw: 0.73,
 
   // The hidden system prompt and custom instructions are invisible to the page
   // and unmeasured, so by default only visible text is counted. Raise this to

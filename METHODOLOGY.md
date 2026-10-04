@@ -8,16 +8,24 @@
 ## What it does not know, and has to assume
 - The system prompt and custom instructions sent with every request.
   OpenAI's web app exposes no token-usage number anywhere (unlike the
-  raw API, which returns one), so it is not counted (hiddenOverheadTokens in src/constants.js defaults to 0).
+  raw API, which returns one), so it is not counted
+  (`hiddenOverheadTokens` in `src/constants.js` defaults to 0).
 - Any hidden or retrieved older conversation history. OpenAI does not
   necessarily resend the full visible thread verbatim on every turn.
-- Whether a response used extended "reasoning" before answering.
-  Reasoning tokens are generated but never shown. Jegham et al. 2025
-  directly measured GPT-5's high-vs-minimal-reasoning energy ratio at
-  4.8x (long prompts) to 14.8x (short prompts); `reasoningMultiplier`
-  uses 5x, a conservative pick near the low end of that measured range,
-  applied when a reasoning indicator is detected in the DOM (itself a
-  heuristic, see Known limitations).
+- Hidden work: thinking, reading attachments, and generating images
+  happen out of sight and leave no text on the page. ChatGPT shows a
+  label such as "Worked for 29s" or "Thought for 7s". The extension
+  reads it and converts the seconds to energy at about 0.73 kW per
+  request (`workPowerKw`), a figure derived from the utilization and
+  power assumptions in Jegham et al. 2025, not a published number. For
+  scale, that paper measured GPT-5 high reasoning at 4.8x to 14.8x the
+  energy of minimal reasoning. "A few seconds" is counted as 5 s and one
+  turn is capped at 15 minutes. As a cross-check for images, a Hugging
+  Face and Carnegie Mellon study (Luccioni, Jernite & Strubell, FAccT
+  2024) measured open image models at about 2.9 Wh per image on average,
+  the same ballpark as the roughly 6 Wh this gives for a 29-second image
+  turn. Attachments and images that come without such a label are not
+  counted.
 - Which physical data center or cooling system handled the request.
   Not every facility uses evaporative cooling; some are closed-loop or
   air-cooled with near-zero direct water use.
@@ -37,8 +45,9 @@ This isn't the first attempt at this. Worth knowing before contributing:
   found the extension reliably increased awareness but had limited effect
   on actual usage, people kept using ChatGPT when it was useful to them
   regardless of the eco-feedback. Their own future-work section flags
-  exactly the gap this project tries to close: "per-query cost estimates
-  remain unavailable [for] newer chain-of-thought models." We trade their
+  exactly the gap this project tries to close: per-query cost estimates
+  were not yet available for newer models, chain-of-thought ones in
+  particular. We trade their
   stronger privacy guarantee (never reading message content) for a
   token-based estimate, since the text is already visible in the page DOM
   either way.
@@ -74,9 +83,15 @@ than a flat conversion ratio. The paper's own short-prompt estimate
 (0.42 Wh) independently landed within 19% of Sam Altman's disclosed
 0.34 Wh average, which is why this is the default: it's the only one of
 the four benchmarked against both a real model and another public
-disclosure. Limitation: measured for GPT-4o, not whichever model is
-currently selected in ChatGPT, and interpolation between three points
-is still an approximation, not a fourth measurement.
+disclosure. Between the measured points the energy is interpolated.
+Below the smallest one (a 400-token exchange) it scales down
+proportionally, so a one-line reply is not charged the cost of a full
+answer; this likely underestimates fixed per-request overhead for very
+short messages. Above the largest point it stays flat rather than guess
+at a slope the paper didn't measure. Limitation: measured for GPT-4o,
+not whichever model is currently selected in ChatGPT (see Model
+coverage below), and interpolation between three points is still an
+approximation, not a fourth measurement.
 
 ### 1. `openai-disclosed.js`
 Scales Sam Altman's public figure (0.34 Wh / ~0.32 mL per query, blog
@@ -120,12 +135,24 @@ behind one chosen ratio:
   for upstream electricity-generation water. This is the least certain
   number in the entire chain and swings hardest by region.
 
+Hidden-work energy (the "Worked for ..." seconds) is converted to water
+and carbon with the same per-Wh ratios as whichever methodology is
+selected.
+
 ## Known limitations
 - **DOM fragility**: `[data-message-author-role]` is the one hook most
   ChatGPT tooling has relied on. There is no stable public API for this;
   it will break on a frontend redesign and need updating.
-- **Reasoning detection**: the reasoning-indicator selector is a guess
-  and may miss or over-trigger depending on UI version.
+- **Work label**: the "Worked for ..." text is read straight from the
+  page, so a wording or layout change on ChatGPT's side can stop it
+  being picked up.
+- **Model coverage**: the default benchmark was measured on GPT-4o,
+  which OpenAI retired from ChatGPT in February 2026. The current
+  default there is GPT-5.5 Instant, and as of October 2026 no public
+  benchmark lists it (the live "How Hungry is AI?" dashboard stops at
+  GPT-5 variants). The extension cannot see which model answered, so
+  every estimate is calibrated to the closest measured model, not the
+  one actually running.
 - **No ground truth**: none of this can be checked against OpenAI's
   actual infrastructure numbers, because OpenAI doesn't publish them at
   the per-query level. Treat the output as a plausible order of

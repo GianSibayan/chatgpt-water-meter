@@ -5,6 +5,7 @@ import { calculate as calcGoogle } from './methodology/google-fullstack.js';
 import { calculate as calcFlops } from './methodology/flops-based.js';
 import { calculate as calcJegham } from './methodology/jegham-benchmark.js';
 import { addUsage, getTotals, getChatTotal } from './lib/storage.js';
+import { workSecondsForTurn, hiddenWorkUsage } from './lib/worktime.js';
 import { mountWidget, setToday, setChat, layoutWidget } from './lib/widget.js';
 
 const METHODS = { openai: calcOpenAI, google: calcGoogle, flops: calcFlops, jegham: calcJegham };
@@ -37,6 +38,7 @@ chrome.storage.onChanged.addListener((changes) => {
 const MESSAGE_SELECTOR = '[data-message-author-role]';
 
 const seen = new Set();
+const workCounted = new Map(); // turn key -> seconds of hidden work already counted
 
 // Messages already on screen when a page or saved chat loads are history, not
 // new usage. The first pass after load (or after switching saved chats) only
@@ -51,13 +53,29 @@ function extractMessages() {
       id: el.getAttribute('data-message-id') || el.textContent.slice(0, 24),
       role: el.getAttribute('data-message-author-role'),
       text: el.textContent || '',
-      reasoning: !!el.querySelector('[data-reasoning], .reasoning, [aria-label*="reasoning" i]'),
     }))
     .filter((m) => m.text.trim().length > 0);
 }
 
+// Hidden work (thinking, reading files, making images) has no text on the page
+// except a label like "Worked for 29s" on the assistant's turn. The label can
+// appear after the reply is first seen, so we track seconds already counted per
+// turn and only add the difference.
+function scanWork() {
+  const found = new Map();
+  for (const el of document.querySelectorAll('[data-message-author-role="assistant"]')) {
+    const turn = el.closest('article, [data-testid^="conversation-turn"]') || el.parentElement;
+    if (!turn) continue;
+    const id = turn.getAttribute('data-turn-id') || turn.getAttribute('data-testid') || el.getAttribute('data-message-id') || '';
+    const key = `${currentChatId() || 'new'}|${id}`;
+    if (!found.has(key)) found.set(key, workSecondsForTurn(turn));
+  }
+  return found;
+}
+
 function processConversation() {
   const messages = extractMessages();
+  const work = scanWork();
 
   if (location.pathname !== lastPath) {
     if (lastPath.includes('/c/')) baselinePending = true;
@@ -65,13 +83,13 @@ function processConversation() {
   }
   if (baselinePending) {
     for (const m of messages) seen.add(m.id);
+    for (const [key, secs] of work) workCounted.set(key, secs);
     baselinePending = false;
     return;
   }
 
   let inputTokens = 0;
   let outputTokens = 0;
-  let sawReasoning = false;
 
   for (const m of messages) {
     if (seen.has(m.id)) continue;
@@ -81,19 +99,33 @@ function processConversation() {
       inputTokens += tokens;
     } else if (m.role === 'assistant') {
       outputTokens += tokens;
-      if (m.reasoning) sawReasoning = true;
     }
   }
 
-  if (inputTokens === 0 && outputTokens === 0) return;
+  let hiddenSeconds = 0;
+  for (const [key, secs] of work) {
+    const before = workCounted.get(key) || 0;
+    if (secs > before) {
+      hiddenSeconds += secs - before;
+      workCounted.set(key, secs);
+    }
+  }
 
-  const totalInput = inputTokens + constants.hiddenOverheadTokens;
-  const effectiveOutput = sawReasoning ? outputTokens * constants.reasoningMultiplier : outputTokens;
+  if (inputTokens === 0 && outputTokens === 0 && hiddenSeconds === 0) return;
 
   const calc = METHODS[methodSetting] || calcJegham;
-  const result = calc({ inputTokens: totalInput, outputTokens: effectiveOutput });
+  const total = { energyWh: 0, waterMl: 0, carbonG: 0 };
+  const addTo = (r) => {
+    total.energyWh += r.energyWh;
+    total.waterMl += r.waterMl;
+    total.carbonG += r.carbonG || 0;
+  };
+  if (inputTokens > 0 || outputTokens > 0) {
+    addTo(calc({ inputTokens: inputTokens + constants.hiddenOverheadTokens, outputTokens }));
+  }
+  if (hiddenSeconds > 0) addTo(hiddenWorkUsage(hiddenSeconds, calc));
 
-  addUsage(result, currentChatId());
+  addUsage(total, currentChatId());
 }
 
 // ChatGPT streams responses token by token, so the DOM mutates dozens of
