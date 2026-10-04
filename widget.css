@@ -1,0 +1,69 @@
+@font-face {
+  font-family: "WM Zen Kurenaido";
+  src: url("chrome-extension://__MSG_@@extension_id__/fonts/zen-kurenaido-latin-400-normal.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+#water-meter-widget {
+  position: fixed;
+  right: 32px;
+  bottom: 10px;
+  width: 240px;
+  z-index: 999999;
+  color: #fff;
+  font: 13px/1.4 "WM Zen Kurenaido", "Segoe UI", system-ui, -apple-system, sans-serif;
+  pointer-events: none;
+  transition: width 0.3s ease, bottom 0.3s ease;
+}
+#water-meter-widget * { box-sizing: border-box; }
+
+#water-meter-widget .wm-card {
+  position: relative;
+  overflow: hidden;
+  background: #0f172a;
+  border-radius: 14px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+#water-meter-widget .wm-credit { margin-top: 6px; text-align: center; font-size: 11px; color: #808080; }
+
+#water-meter-widget .wm-water {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--wm-level, 10%);
+  background: #0369a1;
+  transition: height 1.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+#water-meter-widget .wm-wave {
+  position: absolute;
+  left: 0;
+  bottom: 100%;
+  display: block;
+  width: 200%;
+  height: 12px;
+  animation: wm-slide 6s linear infinite;
+}
+#water-meter-widget .wm-wave-front path { fill: #0369a1; }
+#water-meter-widget .wm-wave-back { animation-duration: 9s; animation-direction: reverse; }
+#water-meter-widget .wm-wave-back path { fill: #0284c7; }
+@keyframes wm-slide { to { transform: translateX(-50%); } }
+
+#water-meter-widget .wm-content { position: relative; padding: 12px 14px; }
+#water-meter-widget .wm-header { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+#water-meter-widget .wm-row { display: flex; justify-content: space-between; gap: 12px; white-space: nowrap; }
+#water-meter-widget .wm-row strong { font-weight: 400; font-size: 14px; font-variant-numeric: tabular-nums; }
+#water-meter-widget .wm-extra { font-size: 11px; color: rgba(255, 255, 255, 0.85); margin-top: 4px; }
+#water-meter-widget .wm-extra:empty { display: none; }
+
+#water-meter-widget.wm-compact { width: 170px; font-size: 12px; }
+#water-meter-widget.wm-compact .wm-card { border-radius: 12px; }
+#water-meter-widget.wm-compact .wm-header,
+#water-meter-widget.wm-compact .wm-extra { display: none; }
+#water-meter-widget.wm-compact .wm-content { padding: 8px 12px; }
+
+@media (prefers-reduced-motion: reduce) {
+  #water-meter-widget .wm-wave { animation: none; }
+}

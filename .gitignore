@@ -1,0 +1,6 @@
+node_modules/
+/background.js
+/content-script.js
+/popup.js
+*.log
+.DS_Store

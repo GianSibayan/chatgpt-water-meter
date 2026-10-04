@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <style>
+    body { width: 240px; font: 13px system-ui, -apple-system, sans-serif; padding: 12px; margin: 0; }
+    h1 { font-size: 14px; margin: 0 0 10px; }
+    .row { display: flex; justify-content: space-between; margin-top: 6px; }
+    .row span:last-child { font-variant-numeric: tabular-nums; opacity: 0.85; }
+    label { display: block; margin-top: 12px; font-size: 11px; opacity: 0.6; }
+    select { width: 100%; margin-top: 4px; }
+    .footer { margin-top: 10px; font-size: 10px; opacity: 0.5; }
+  </style>
+</head>
+<body>
+  <h1>ChatGPT Water Meter</h1>
+  <div class="row"><span>Today</span><span id="today">-</span></div>
+  <div class="row"><span>This week</span><span id="week">-</span></div>
+  <div class="row"><span>All time</span><span id="all">-</span></div>
+
+  <label for="method">Methodology</label>
+  <select id="method">
+    <option value="jegham">Jegham et al. benchmark (default)</option>
+    <option value="openai">OpenAI disclosed</option>
+    <option value="google">Google full-stack</option>
+    <option value="flops">FLOPs-based</option>
+  </select>
+
+  <div class="footer">Estimated from your prompts and ChatGPT's replies in this browser. Today/week/all-time will differ once you've used it for more than one day.</div>
+  <script src="popup.js"></script>
+</body>
+</html>
