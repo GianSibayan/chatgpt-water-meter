@@ -41,11 +41,15 @@ const seen = new Set();
 const workCounted = new Map(); // turn key -> seconds of hidden work already counted
 const imagesCounted = new Set(); // generated image ids already counted
 
-// Messages already on screen when a page or saved chat loads are history, not
-// new usage. The first pass after load (or after switching saved chats) only
-// records them as seen. Going from a new chat ("/") into "/c/..." is not a
-// switch, so the first exchange of a new chat still counts.
-let baselinePending = true;
+// Only things that appear after you press send are counted. Everything already
+// on screen (an old chat opening, older messages or images loading late) is
+// history and is just recorded so it never counts. Pressing send marks the chat
+// "active"; opening a different chat ends that, except for a brand new chat
+// ("/") turning into "/c/..." right after you send its first message.
+const ACTIVE_MS = 15 * 60 * 1000;
+let active = false;
+let activeUntil = 0;
+let lastSendAt = 0;
 let lastPath = location.pathname;
 
 function extractMessages() {
@@ -76,20 +80,61 @@ function scanImages() {
   return scanGeneratedImages(document.querySelector('main') || document.body);
 }
 
-function processConversation() {
-  const messages = extractMessages();
-  const work = scanWork();
-  const images = scanImages();
+function snapshot() {
+  return { messages: extractMessages(), work: scanWork(), images: scanImages() };
+}
 
-  if (location.pathname !== lastPath) {
-    if (lastPath.includes('/c/')) baselinePending = true;
-    lastPath = location.pathname;
-  }
-  if (baselinePending) {
-    for (const m of messages) seen.add(m.id);
-    for (const [key, secs] of work) workCounted.set(key, secs);
-    for (const im of images) imagesCounted.add(im.id);
-    baselinePending = false;
+function baselineWith(snap) {
+  for (const m of snap.messages) seen.add(m.id);
+  for (const [key, secs] of snap.work) workCounted.set(key, secs);
+  for (const im of snap.images) imagesCounted.add(im.id);
+}
+
+// Opening a different chat ends the "active" state. Going from a new chat ("/")
+// into "/c/..." right after sending its first message does not.
+function syncPath() {
+  if (location.pathname === lastPath) return;
+  const newChatStarted = active && !lastPath.includes('/c/') && location.pathname.includes('/c/');
+  if (!newChatStarted) active = false;
+  lastPath = location.pathname;
+}
+
+function onSend() {
+  syncPath();
+  const now = Date.now();
+  // Enter fires several events at once; only the first one may snapshot, before
+  // the new message reaches the page.
+  if (now - lastSendAt > 1500) baselineWith(snapshot());
+  lastSendAt = now;
+  active = true;
+  activeUntil = now + ACTIVE_MS;
+}
+
+document.addEventListener('submit', onSend, true);
+document.addEventListener(
+  'keydown',
+  (e) => {
+    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.target.closest && e.target.closest('#prompt-textarea, form')) onSend();
+  },
+  true
+);
+document.addEventListener(
+  'click',
+  (e) => {
+    const b = e.target.closest && e.target.closest('button');
+    if (!b) return;
+    const label = `${b.getAttribute('aria-label') || ''} ${b.getAttribute('data-testid') || ''} ${b.id || ''}`;
+    if (/send|submit|regenerate|retry|try again|resend/i.test(label)) onSend();
+  },
+  true
+);
+
+function processConversation() {
+  syncPath();
+  const { messages, work, images } = snapshot();
+
+  if (!active || Date.now() > activeUntil) {
+    baselineWith({ messages, work, images });
     return;
   }
 
@@ -171,6 +216,7 @@ scheduleProcess();
 window.addEventListener('resize', layoutWidget);
 let shownPath = location.pathname;
 setInterval(() => {
+  syncPath();
   layoutWidget();
   if (location.pathname !== shownPath) {
     shownPath = location.pathname;
