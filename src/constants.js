@@ -87,6 +87,12 @@ export default {
   // Cross-check: 0.73 kW for about 6 s reproduces their 1.2 Wh medium prompt.
   workPowerKw: 0.73,
 
+    // Each generated image is counted at a flat estimate. Hugging Face and Carnegie
+  // Mellon (Luccioni, Jernite & Strubell, FAccT 2024) measured open image models
+  // at 2.907 kWh per 1,000 images on average, about 2.9 Wh each. OpenAI has not
+  // published its image model's figure, so this is a stand-in, not a measurement.
+  imageEnergyWh: 2.9,
+  
   // The hidden system prompt and custom instructions are invisible to the page
   // and unmeasured, so by default only visible text is counted. Raise this to
   // add your own per-exchange guess.

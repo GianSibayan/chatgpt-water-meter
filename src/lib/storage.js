@@ -18,6 +18,8 @@ const zero = () => ({ energyWh: 0, waterMl: 0, carbonG: 0 });
 // Every exchange is added to the day's total and, when we know which chat it
 // happened in, to that chat's own running total.
 export async function addUsage(result, chatId) {
+  // Never store a broken number: one NaN would wipe that day's running total.
+  if (!Number.isFinite(result.energyWh) || !Number.isFinite(result.waterMl)) return;
   const dayKey = `usage:${localDateStr()}`;
   const stored = await chrome.storage.local.get(dayKey);
   const day = stored[dayKey] || { ...zero(), messages: 0 };

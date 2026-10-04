@@ -5,7 +5,7 @@ import { calculate as calcGoogle } from './methodology/google-fullstack.js';
 import { calculate as calcFlops } from './methodology/flops-based.js';
 import { calculate as calcJegham } from './methodology/jegham-benchmark.js';
 import { addUsage, getTotals, getChatTotal } from './lib/storage.js';
-import { workSecondsForTurn, hiddenWorkUsage } from './lib/worktime.js';
+import { scanWorkLabels, scanGeneratedImages, hiddenWorkUsage, imageUsage } from './lib/worktime.js';
 import { mountWidget, setToday, setChat, layoutWidget } from './lib/widget.js';
 
 const METHODS = { openai: calcOpenAI, google: calcGoogle, flops: calcFlops, jegham: calcJegham };
@@ -39,6 +39,7 @@ const MESSAGE_SELECTOR = '[data-message-author-role]';
 
 const seen = new Set();
 const workCounted = new Map(); // turn key -> seconds of hidden work already counted
+const imagesCounted = new Set(); // generated image ids already counted
 
 // Messages already on screen when a page or saved chat loads are history, not
 // new usage. The first pass after load (or after switching saved chats) only
@@ -58,24 +59,27 @@ function extractMessages() {
 }
 
 // Hidden work (thinking, reading files, making images) has no text on the page
-// except a label like "Worked for 29s" on the assistant's turn. The label can
-// appear after the reply is first seen, so we track seconds already counted per
-// turn and only add the difference.
+// except a label like "Worked for 29s" in the turn. The label can appear after
+// the reply is first seen, so we track seconds already counted per turn and
+// only add the difference.
 function scanWork() {
   const found = new Map();
-  for (const el of document.querySelectorAll('[data-message-author-role="assistant"]')) {
-    const turn = el.closest('article, [data-testid^="conversation-turn"]') || el.parentElement;
-    if (!turn) continue;
-    const id = turn.getAttribute('data-turn-id') || turn.getAttribute('data-testid') || el.getAttribute('data-message-id') || '';
-    const key = `${currentChatId() || 'new'}|${id}`;
-    if (!found.has(key)) found.set(key, workSecondsForTurn(turn));
+  const root = document.querySelector('main') || document.body;
+  for (const { idPart, seconds } of scanWorkLabels(root)) {
+    const key = `${currentChatId() || 'new'}|${idPart}`;
+    found.set(key, (found.get(key) || 0) + seconds);
   }
   return found;
+}
+
+function scanImages() {
+  return scanGeneratedImages(document.querySelector('main') || document.body);
 }
 
 function processConversation() {
   const messages = extractMessages();
   const work = scanWork();
+  const images = scanImages();
 
   if (location.pathname !== lastPath) {
     if (lastPath.includes('/c/')) baselinePending = true;
@@ -84,6 +88,7 @@ function processConversation() {
   if (baselinePending) {
     for (const m of messages) seen.add(m.id);
     for (const [key, secs] of work) workCounted.set(key, secs);
+    for (const im of images) imagesCounted.add(im.id);
     baselinePending = false;
     return;
   }
@@ -102,8 +107,21 @@ function processConversation() {
     }
   }
 
+  // Images are counted at a flat estimate, and a turn with an image is not also
+  // counted by its time label, so the same work is never counted twice.
+  let newImages = 0;
+  const imageTurns = new Set();
+  for (const im of images) {
+    imageTurns.add(`${currentChatId() || 'new'}|${im.idPart}`);
+    if (!imagesCounted.has(im.id)) {
+      imagesCounted.add(im.id);
+      newImages++;
+    }
+  }
+
   let hiddenSeconds = 0;
   for (const [key, secs] of work) {
+    if (imageTurns.has(key)) continue;
     const before = workCounted.get(key) || 0;
     if (secs > before) {
       hiddenSeconds += secs - before;
@@ -111,7 +129,7 @@ function processConversation() {
     }
   }
 
-  if (inputTokens === 0 && outputTokens === 0 && hiddenSeconds === 0) return;
+  if (inputTokens === 0 && outputTokens === 0 && hiddenSeconds === 0 && newImages === 0) return;
 
   const calc = METHODS[methodSetting] || calcJegham;
   const total = { energyWh: 0, waterMl: 0, carbonG: 0 };
@@ -124,6 +142,7 @@ function processConversation() {
     addTo(calc({ inputTokens: inputTokens + constants.hiddenOverheadTokens, outputTokens }));
   }
   if (hiddenSeconds > 0) addTo(hiddenWorkUsage(hiddenSeconds, calc));
+  if (newImages > 0) addTo(imageUsage(newImages, calc));
 
   addUsage(total, currentChatId());
 }
