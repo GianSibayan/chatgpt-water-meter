@@ -1,4 +1,5 @@
-# stop it with da water yochacho
+# ChatGPT Water Meter
+stop it with da water yochacho
 
 A small browser extension that shows roughly how much water your ChatGPT chats use.
 
